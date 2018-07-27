@@ -4,9 +4,9 @@ import config from './config'
 const { log } = console
 const douban = {}
 douban.comments = []
-douban.uplist = ['120964029']
+douban.uplist = ['120964029', '121043085', '121043094', '121043098', '121043117']
 const { apis } = config
-const io = request.defaults({
+let Client = request.defaults({
   headers: config.headers,
   json: true,
   form: config.form,
@@ -14,7 +14,7 @@ const io = request.defaults({
 })
 
 function delay(time) {
-  return new Promise(((resolve, reject) => {
+  return new Promise(((resolve) => {
     setTimeout(() => {
       resolve()
     }, time)
@@ -32,6 +32,21 @@ function getSig() {
   return { _st: ts, _sig: sig }
 }
 
+function tuling(text) {
+  return new Promise(((resolve, reject) => {
+    request.post('http://www.tuling123.com/openapi/api', { timeout: 3000, json: true, form: { key: config.tuling, info: text } }, (e, r, b) => {
+      if (e) reject(e)
+      else {
+        let result = b.text
+        if (result.match(/暂时无法回答|不知道答案/)) {
+          result = '哎呀我忘了要说什么了'
+        }
+        resolve(result)
+      }
+    })
+  }))
+}
+
 function requestPromise(method, url, data) {
   return new Promise(((resolve, reject) => {
     const formData = Object.assign({}, getSig(), config.form, data)
@@ -41,7 +56,7 @@ function requestPromise(method, url, data) {
     }
     if (method === 'get') requestObj.qs = formData
     else if (method === 'post') requestObj.form = formData
-    global.api(
+    Client(
       requestObj,
       (error, res, body) => {
         if (error) reject(error)
@@ -66,16 +81,16 @@ async function tryRequest(method, url, data) {
 async function login() {
   return new Promise(((resolve, reject) => {
     const formData = Object.assign(getSig(), config.form, { username: config.username, password: config.password })
-    io.post(apis.login.url, { form: formData }, (e, r, b) => {
+    Client.post(apis.login.url, { form: formData }, (e, r, b) => {
       if (e) reject(e)
       else {
-        global.douban = Object.assign({}, { access_token: b.access_token, refresh_token: b.refresh_token })
-        global.api = io.defaults({
+        Client = Client.defaults({
           headers: Object.assign({}, config.headers, { Authorization: `Bearer ${b.access_token}` }),
           baseUrl: 'https://frodo.douban.com/api/v2/',
           jar: true
         })
         resolve(b)
+        log('登陆信息：', b)
       }
     })
   }))
@@ -127,34 +142,28 @@ async function reply() {
 }
 
 async function autoUp() {
-  while (douban.comments.length) {
-    await delComment(douban.comments[0].tid, douban.comments[0].cid)
-    douban.comments.shift()
-    await delay(2000)
-  }
   log('-----AutoUp-----')
   for (const tid of douban.uplist) {
-    const cid = (await addComment(tid, `Up ${getTime()}`)).id
-    log(getTime(), `Up：${tid}:${cid}`)
-    douban.comments.push({ tid, cid })
+    if (douban.comments.length === douban.uplist.length) {
+      try {
+        await delComment(douban.comments[0].tid, douban.comments[0].cid)
+        douban.comments.shift()
+      } catch (err) {
+        log('删除出错：', err)
+      }
+      await delay(2000)
+    }
+    try {
+      const addComRes = await addComment(tid, `Up ${getTime()}`)
+      const cid = addComRes.id
+      log(getTime(), `Up：${tid}:${cid}`)
+      douban.comments.push({ tid, cid })
+    } catch (err) {
+      log('回复出错：', err)
+    }
     await delay(10000)
   }
-  setTimeout(autoUp, 60000)
-}
-
-function tuling(text) {
-  return new Promise(((resolve, reject) => {
-    request.post('http://www.tuling123.com/openapi/api', { timeout: 3000, json: true, form: { key: config.tuling, info: text } }, (e, r, b) => {
-      if (e) reject(e)
-      else {
-        let result = b.text
-        if (result.match(/暂时无法回答|不知道答案/)) {
-          result = '哎呀我忘了要说什么了'
-        }
-        resolve(result)
-      }
-    })
-  }))
+  setTimeout(autoUp, 120000)
 }
 
 (async function () {
