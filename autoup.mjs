@@ -161,9 +161,9 @@ async function autoUp() {
     } catch (err) {
       log('回复出错：', err)
     }
-    await delay(10000)
+    await delay(60000)
   }
-  setTimeout(autoUp, 120000)
+  setTimeout(autoUp, 600000)
 }
 
 (async function () {
