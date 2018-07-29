@@ -144,7 +144,7 @@ async function reply() {
 async function autoUp() {
   log('-----AutoUp-----')
   for (const tid of douban.uplist) {
-    if (douban.comments.length === douban.uplist.length) {
+    if (douban.comments.length >= douban.uplist.length) {
       try {
         await delComment(douban.comments[0].tid, douban.comments[0].cid)
         douban.comments.shift()
